@@ -16,6 +16,11 @@
  */
 #include <config.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#ifdef HOST_WIN32
+#include <direct.h>
+#endif
 #ifndef HOST_WIN32
 #include <dirent.h>
 #endif
@@ -375,6 +380,36 @@ main (int _argc, char* _argv[])
 
 	LocalFree (argvw);
 
+	if (argc > 1 && strcmp (argv [1], "new") == 0) {
+		if (argc < 3) {
+			fprintf (stderr, "Usage: mono new <project_name>\n");
+			return 1;
+		}
+		const char *project_name = argv [2];
+		
+		if (strlen (project_name) > 255) {
+			fprintf (stderr, "Error: Project name is too long.\n");
+			return 1;
+		}
+
+		if (_mkdir (project_name) != 0) {
+			perror ("Error creating directory");
+			return 1;
+		}
+		
+		char filename [512];
+		snprintf (filename, sizeof (filename), "%s/Program.cs", project_name);
+		FILE *f = fopen (filename, "w");
+		if (!f) {
+			perror ("Error creating file");
+			return 1;
+		}
+		fprintf (f, "using System;\n\npublic class Program {\n\tpublic static void Main() {\n\t\tConsole.WriteLine(\"Hello from Mono New!\");\n\t}\n}\n");
+		fclose (f);
+		printf ("Created new project: %s\n", project_name);
+		return 0;
+	}
+
 	if (mono_get_module_filename (NULL, &module_file_name, &length)) {
 		char *entry = g_utf16_to_utf8 (module_file_name, length, NULL, NULL, NULL);
 		g_free (module_file_name);
@@ -389,6 +424,41 @@ main (int _argc, char* _argv[])
 int
 main (int argc, char* argv[])
 {
+	if (argc > 1 && strcmp (argv [1], "new") == 0) {
+		if (argc < 3) {
+			fprintf (stderr, "Usage: mono new <project_name>\n");
+			return 1;
+		}
+		const char *project_name = argv [2];
+		
+		/* Perfection: Check for project name length to prevent buffer overflow */
+		if (strlen (project_name) > 255) {
+			fprintf (stderr, "Error: Project name is too long.\n");
+			return 1;
+		}
+
+		#ifdef HOST_WIN32
+		if (_mkdir (project_name) != 0) {
+		#else
+		if (mkdir (project_name, 0755) != 0) {
+		#endif
+			perror ("Error creating directory");
+			return 1;
+		}
+		
+		char filename [512];
+		snprintf (filename, sizeof (filename), "%s/Program.cs", project_name);
+		FILE *f = fopen (filename, "w");
+		if (!f) {
+			perror ("Error creating file");
+			return 1;
+		}
+		fprintf (f, "using System;\n\npublic class Program {\n\tpublic static void Main() {\n\t\tConsole.WriteLine(\"Hello from Mono New!\");\n\t}\n}\n");
+		fclose (f);
+		printf ("Created new project: %s\n", project_name);
+		return 0;
+	}
+
 	mono_build_date = build_date;
 
 #if TEST_ICALL_SYMBOL_MAP
